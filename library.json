@@ -1,0 +1,29 @@
+{
+  "name": "TouchSensor",
+  "version": "1.0.0",
+  "description": "Capacitive touch sensor helibrarylper for Arduino/PlatformIO",
+  "keywords": ["touch", "sensor", "capacitive"],
+  "authors": [
+    { "name": "D. L. Ehnebuske", "url": "https://github.com/dehne" }
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/dehne/TouchSensor",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dehne/TouchSensor.git"
+  },
+  "frameworks": ["arduino"],
+  "platforms": ["AVR"],
+  "build": {
+    "includeDir": "src",
+    "srcDir": "src"
+  },
+  "export": {
+    "ignore": [
+      "docs/**",
+      ".github/**",
+      ".*",
+      "CMakeLists.txt"
+    ]
+  }
+}
