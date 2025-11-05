@@ -28,7 +28,7 @@
  * 
  ****/
 #include <Arduino.h>
-#include "TouchSensor.h"
+#include <TouchSensor.h>
 
 TouchSensor sensor[] {2, 3, 4, 5};                                  // The sensors themselves
 
