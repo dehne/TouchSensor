@@ -3,7 +3,7 @@
  * 
  *****
  * 
- * TouchSensor V1.0.0, October 2025
+ * TouchSensor V1.1.0, November 2025
  * Copyright (C) 2024-2025 D.L. Ehnebuske
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -173,6 +173,12 @@ bool TouchSensor::begin() {
   ts_stateData_t defaultState;
   defaultState.prediction = defaultState.measure = TS_ASSUMED_MEASURE;
   defaultState.noise = TS_ASSUMED_NOISE;
+  defaultState.measInvFactor = TS_MEAS_INV_FACTOR;
+  defaultState.noiseFactor = TS_NOISE_FACTOR;
+  defaultState.predictionShift = TS_PREDICTION_SHIFT;
+  defaultState.noiseShift = TS_NOISE_SHIFT;
+  defaultState.assumedMeas = TS_ASSUMED_MEASURE;
+  defaultState.assumedNoise = TS_ASSUMED_NOISE;
   return begin(defaultState);
 }
 
@@ -243,11 +249,7 @@ bool TouchSensor::begin(ts_stateData_t initState) {
 
 
 // Get things going for this instance
-  state.prediction = initState.prediction;                  // Set our initial state as specified
-  state.measure = initState.measure;
-  state.noise = initState.noise;
-  shiftedPrediction = state.prediction << TS_PREDICTION_SHIFT;
-  shiftedNoise = state.noise << TS_NOISE_SHIFT;
+  setStateData(initState);
   pinMode(pinNumber, OUTPUT);                               // Start charging our sensor
   digitalWrite(pinNumber, HIGH);
   ts_isr::clientPending[pinNumber] = true;
@@ -337,10 +339,14 @@ bool TouchSensor::beingTouched() {
 
 ts_stateData_t TouchSensor::getStateData() {
   ts_stateData_t answer;
-  answer.prediction = state.prediction;
-  answer.measure = state.measure;
-  answer.noise = state.noise;
+  memcpy(&answer, &state, sizeof(answer));
   return answer;
+}
+
+void TouchSensor::setStateData(ts_stateData_t newState) {
+  memcpy(&state, &newState, sizeof(state));
+  shiftedPrediction = state.prediction << state.predictionShift;
+  shiftedNoise = state.noise << state.noiseShift;
 }
 
 uint8_t TouchSensor::getPin() {
@@ -369,16 +375,16 @@ void TouchSensor::doRun() {
   unsigned long curNoise    // curNoise is abs(curMeasure - state.measure)
     = (curMeasure > state.measure ? curMeasure - state.measure : state.measure - curMeasure);
   shiftedNoise = shiftedNoise - state.noise + curNoise;
-  state.noise = shiftedNoise >> TS_NOISE_SHIFT;
+  state.noise = shiftedNoise >> state.noiseShift;
 
   // Update the actual measurement
   state.measure = curMeasure;
 
   // Decide whether the new measurement is different enough that whether we're being touched has changed
   bool nowTouching = touching;
-  if(state.measure > state.prediction + state.noise + TS_HYSTERESIS) {
+  if(state.measure > state.prediction + state.measure / state.measInvFactor + state.noiseFactor * state.noise) {
     nowTouching = true;
-  } else if (state.prediction > state.measure + state.noise + TS_HYSTERESIS) {
+  } else if (state.prediction > state.measure + state.measure / state.measInvFactor + state.noiseFactor * state.noise) {
     nowTouching = false;
   }
 
@@ -386,17 +392,17 @@ void TouchSensor::doRun() {
   if (nowTouching == touching) {
     // If the state didn't change, update the prediction to be a little closer to this time's measurement
     shiftedPrediction = shiftedPrediction - state.prediction + state.measure;
-    state.prediction = shiftedPrediction >> TS_PREDICTION_SHIFT;
+    state.prediction = shiftedPrediction >> state.predictionShift;
   } else {
     // Otherwise update the prediction to say it'll be the same as this time's measurement
     state.prediction = state.measure;
-    shiftedPrediction = state.prediction << TS_PREDICTION_SHIFT;
+    shiftedPrediction = state.prediction << state.predictionShift;
   }
 
   // Decide whether a touch that the client hasn't asked about has happened
-  if (nowTouching && !touching) {                       // If the sensor just went from being not touched to being touched, it happened
+  if (nowTouching && !touching) {           // If the sensor just went from being not touched to being touched, it happened
     touchHappened = true;
-  } else if (touchHappened && checked) {                // else if an earlier one was checked, it certainly didn't happen
+  } else if (touchHappened && checked) {    // else if an earlier one was checked, it certainly didn't happen
     touchHappened = false;
   }
   checked = false;

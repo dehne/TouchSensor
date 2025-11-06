@@ -47,6 +47,14 @@ For p(k), the k<sup>th</sup> prediction, s = TS_PREDICTION_SHIFT, d(k) = m(k), w
 
 For n(k), the k<sup>th</sup> noise estimation, s = TS_NOISE_SHIFT and d(k) = abs(m(k-1) - m(k)) where m(k) is as above.
 
-The state of the sensor -- touched or not-touched -- when m(k) is received is determined by whether m(k) is sufficiently different than p(k-1), given the value of noise(k) and (in this implementation) a fixed value, h = TS_HYSTERESIS.
+The state of the sensor -- touched or not-touched -- at time k is determined by whether m(k) is sufficiently different than p(k), given the values of n(k) and and m(k). 
 
-If m(k) > p(k) + n(k) + h, the sensor is being touched. If m(k) + n(k) + h < p(k), the sensor is not touched. if it's neither of those, its state is what it was for m(k-1).
+Specifically, if
+
+&nbsp;&nbsp;&nbsp;&nbsp;m(k) > p(k) + m(k) / state.measInvFactor + state.noiseFactor * n(k), 
+
+the sensor is being touched and if
+
+&nbsp;&nbsp;&nbsp;&nbsp;p(k) > m(k) + m(k) / state.measInvFactor + state.noiseFactor * n(k), 
+
+the sensor is not being touched. If it's neither of those, its state is what it was at time k-1.

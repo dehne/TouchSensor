@@ -92,20 +92,26 @@
  * computationally efficient "moving average": If a(k) is the k-th average, d(k) is the k-th datum, and s is 
  * a constant, a(k) = (a(k-1) * 2**s + d(k)) / 2**s. 
  * 
- * For p(k), the k-th prediction, s = TS_PREDICTION_SHIFT, d(k) = m(k), where m(k) is the k-th measurement.
+ * For p(k), the k-th prediction, s = state.predictionShift, d(k) = m(k), where m(k) is the k-th measurement.
  * 
- * For n(k), the k-th noise estimation, s = TS_NOISE_SHIFT and d(k) = abs(m(k-1) - m(k)) where m(k) is as above.
+ * For n(k), the k-th noise estimation, s = state.noiseShift and d(k) = abs(m(k-1) - m(k)) where m(k) is as above.
  * 
- * The state of the sensor -- touched or not-touched -- when m(k) is received is determined by whether m(k) is 
- * sufficiently different than p(k), given the value of noise(k) and (in this implementation) a fixed value, 
- * h = TS_HYSTERESIS. 
+ * The state of the sensor -- touched or not-touched -- at time k is determined by whether m(k) is sufficiently 
+ * different than p(k), given the values of n(k) and and m(k). 
  * 
- * If m(k) > p(k) + n(k) + h The sensor is being touched. If m(k) + n(k) + h < p(k), the sensor is not touched. 
- * if it's neither of those, its state is what it was for m(k-1).
+ * Specifically, if 
+ * 
+ *      m(k) > p(k) + m(k) / state.measInvFactor + state.noiseFactor * n(k), 
+ * 
+ * the sensor is being touched and if 
+ * 
+ *      p(k) > m(k) + m(k) / state.measInvFactor + state.noiseFactor * n(k), 
+ * 
+ * the sensor is not being touched. If it's neither of those, its state is what it was at time k-1.
  * 
  *****
  * 
- * TouchSensor V1.0.0, October 2025
+ * TouchSensor V1.1.0, November 2025
  * Copyright (C) 2024-2025 D.L. Ehnebuske
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -134,11 +140,12 @@
 #ifndef TouchSensor_h
 #define TouchSensor_h
 #endif
-constexpr unsigned long TS_HYSTERESIS       = 6;        // Minimum hysteresis it takes to switch state in micros()
-constexpr unsigned long TS_ASSUMED_MEASURE  = 84;       // The assumed measured discharge time in micros()
-constexpr unsigned long TS_ASSUMED_NOISE    = 40;       // The assumed measurement noise in micros() (quite high, initially)
+constexpr unsigned long TS_MEAS_INV_FACTOR  = 9;        // Hysteresis measuerement inverse factor
+constexpr unsigned long TS_NOISE_FACTOR     = 2;        // Hysteresis noise factor
 constexpr unsigned long TS_PREDICTION_SHIFT = 6;        // Bitshift value for the calculation of the prediction
 constexpr unsigned long TS_NOISE_SHIFT      = 2;        // Bitshift value for the calculation of the noise
+constexpr unsigned long TS_ASSUMED_MEASURE  = 84;       // The assumed measured discharge time in micros()
+constexpr unsigned long TS_ASSUMED_NOISE    = 40;       // The assumed measurement noise in micros() (quite high, initially)
 constexpr unsigned long TS_MAX_MICROS       = 10000;    // The "timed out" value for a discharge time in micros()
 
 #define TS_DEBUG                                        // Uncomment to enable general debug output; comment to disable
@@ -156,9 +163,19 @@ constexpr uint8_t TS_TIMER_ISR_PIN              = 11;   // 'Scope pin for timer 
  * 
  */
 struct ts_stateData_t {
+    // The current measurement-related state. Changes measurement by measuement
     unsigned long prediction;       // The predicted value, in micros(), for what measure will be at the next measurement
     unsigned long measure;          // The current measured discharge time in micros()
     unsigned long noise;            // The current estimate, in micros(), of the amount of noise in measure
+
+    // The touched-state algorithm's tuning-related data. Used to tune behavior of a given sensor. Once set, stable over time
+    unsigned long measInvFactor;    // The algorithm's "measurement inverse factor"
+    unsigned long noiseFactor;      // The algorithm's "noise factor"
+    unsigned long predictionShift;  // The algorithm's "prediction shift"
+    unsigned long noiseShift;       // The algorithm's "noise shift"
+    unsigned long assumedMeas;      // The initially assumed measurement
+    unsigned long assumedNoise;     // The amount of noise initially assumed to be present
+
 };
 
 /**
@@ -285,6 +302,13 @@ public:
      * @return ts_calData_t     The current values of the state data.
      */
     ts_stateData_t getStateData();
+
+    /**
+     * @brief Set the TouchSensor's state data
+     * 
+     * @param newState 
+     */
+    void setStateData(ts_stateData_t newState);
 
     /**
      * @brief           Get the number of the GPIO pin to which this TouchSensor is connected.
