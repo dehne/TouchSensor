@@ -11,6 +11,12 @@
  * above. Like "experimental" sensors, it's important that the touch pad's copper is covered with a thin 
  * dielectric of some sort -- maybe solder mask or plastic tape -- so that the copper is not touched directly.
  * 
+ * Microchip's Capacitive Touch Sensor Design Guide:
+ * 
+ *      https://ww1.microchip.com/downloads/en/AppNotes/Capacitive-Touch-Sensor-Design-Guide-DS00002934-B.pdf
+ * 
+ * is a good starting point for information on designing and building capacative touch sensors of various sorts.
+ * 
  * How to use the library
  * ======================
  * 
@@ -259,26 +265,29 @@ public:
      *          touched. Register it with setReleasedHandler() and it'll be called whenever the sensor stops being 
      *          touched. Register it with both, and it'll be called for both changes.
      * 
-     * @param   pin  The pin to which the TouchSensor is attached.
+     * @param   pin     The pin to which the TouchSensor is attached.
+     * @param   client  Pointer to client data; exactly what was passed during registration
      * 
      */
-    using ts_handler_t = void (*)(uint8_t pin);
+    using ts_handler_t = void (*)(uint8_t pin, void* client);
 
     /**
      * @brief Set the function to call (from run()) when the sensor goes from being not touched to 
      *        touched. Specify nullptr as the function to stop the calling.
      * 
-     * @param touchedHandler The function to call
+     * @param touchedHandler    The function to call
+     * @param client            Pointer to client data or nullptr if none
      */
-    void setTouchedHandler(ts_handler_t touchedHandler);
+    void setTouchedHandler(ts_handler_t touchedHandler, void* client);
 
     /**
      * @brief   Set the function to call (from run()) when the sensor goes from being touched to not 
      *          touched. Specify nullptr as the function to stop the calling.
      * 
-     * @param releasedHandler 
+     * @param releasedHandler   The function to cll
+     * @param client            Pointer to client data or nullptr if none
      */
-    void setReleasedHandler(ts_handler_t releasedHandler);
+    void setReleasedHandler(ts_handler_t releasedHandler, void* client);
 
     /**
      * @brief True if the sensor was touched since the last invocation of wasTouched().
@@ -334,7 +343,9 @@ public:
     void updateState(unsigned long deltaMicros) noexcept;
 
     ts_handler_t touchedHandler = nullptr;      // The function, if any, to call when the sensor gets touched
-    ts_handler_t releasedHandler = nullptr;     // The function, if any, to call twhen the sensor stops being touched
+    void* touchedClient = nullptr;              // What the client passed when setTouchedHandler() was called
+    ts_handler_t releasedHandler = nullptr;     // The function, if any, to call when the sensor stops being touched
+    void* releasedClient = nullptr;             // What the client passed when setReleasedHandler() was called
     volatile unsigned long isrMeasure;          // The most recent sensor discharge time in micros() per the ISR
     ts_stateData_t state;                       // The current central state data
     unsigned long shiftedPrediction;            // Always equal to state.prediction * 2**TS_PREDICTION_SHIFT

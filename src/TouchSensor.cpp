@@ -319,12 +319,14 @@ TouchSensor::~TouchSensor()  {
   }
 }
 
-void TouchSensor::setTouchedHandler(ts_handler_t handler) {
+void TouchSensor::setTouchedHandler(ts_handler_t handler, void* client) {
   touchedHandler = handler;
+  touchedClient = client;
 }
 
-void TouchSensor::setReleasedHandler(ts_handler_t handler) {
+void TouchSensor::setReleasedHandler(ts_handler_t handler, void* client) {
   releasedHandler = handler;
+  releasedClient = client;
 }
 
 bool TouchSensor::wasTouched() {
@@ -412,12 +414,12 @@ void TouchSensor::doRun() {
   touching = nowTouching;
   // If there's a touched handler and we just got touched, invoke it.
   if (touchedHandler && gotTouched) {
-    touchedHandler(pinNumber);
+    touchedHandler(pinNumber, touchedClient);
   }
 
   // If there's a released handler and we just stopped being touched, invoke it.
   if (releasedHandler && gotUntouched) {
-    releasedHandler(pinNumber);
+    releasedHandler(pinNumber, releasedClient);
   }
 
   #ifdef TS_DEBUG

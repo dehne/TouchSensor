@@ -2,8 +2,11 @@
  * @file    main.cpp
  * @author  D. L. Ehnebuske (dle.com@ehnebuske.net)
  * @brief   Example of using TouchSensor, a capacitive touch sensor library for Arduino AVR MPUs, with callbacks
- * @version 0.1
- * @date    2025-10-31
+ * @version 2.0.0
+ * @date    2025-11-07
+ * 
+ * A little sample program for interfacing with four separate touch sensors. It displays the state of the sensors 
+ * at the time of the most recent change in state of any of them change, doing so using a callback.
  * 
  ****
  * Copyright (C) 2025 D. L. Ehnebuske
@@ -36,12 +39,12 @@ constexpr unsigned long SERIAL_DELAY = 500;                         // The time 
 constexpr unsigned long DUMP_MILLIS = 250;                          // Sensor dump interval in millis()
 constexpr size_t N_SENSORS = (sizeof(sensor) / sizeof(sensor[0]));  // The number of sensors
 
-void onChange(uint8_t pin) {
+void onChange(uint8_t pin, void* client) {
   Serial.print('\r');
   for (uint8_t sNo = 0; sNo < N_SENSORS; sNo++) {
     Serial.print(sensor[sNo].getPin() == pin ? 
-      (sensor[sNo].beingTouched() ? F("t ") : F("n ")) : 
-      (sensor[sNo].beingTouched() ? F("* ") : F("  ")));
+      (sensor[sNo].beingTouched() ? F("t ") : F("n ")) :            // The sensor that changed is shown as 't' or 'n'
+      (sensor[sNo].beingTouched() ? F("* ") : F("  ")));            //   the others are shown as '*' or ' '
   }
     Serial.print(F(" | "));
   for (uint8_t sNo = 0; sNo < N_SENSORS; sNo++) {
@@ -60,12 +63,17 @@ void setup() {
     Serial.print(sNo);
     Serial.print(F("]: "));
     Serial.println(sensor[sNo].begin() ? F("succeeded") : F("failed"));
-    sensor[sNo].setTouchedHandler(onChange);
-    sensor[sNo].setReleasedHandler(onChange);
+    sensor[sNo].setTouchedHandler(onChange, nullptr);
+    sensor[sNo].setReleasedHandler(onChange, nullptr);
   }
   for (uint8_t sNo = 0; sNo < N_SENSORS; sNo++) {
     Serial.print(sNo);
     Serial.print(' ');
+  }
+  Serial.print(F(" |"));
+  for (uint8_t sNo = 0; sNo < N_SENSORS; sNo++) {
+    Serial.print(F("  "));
+    Serial.print(sNo);
   }
   Serial.print('\n');
 }
