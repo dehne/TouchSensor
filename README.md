@@ -3,11 +3,11 @@
 
 ## Introduction
 
-This is TouchSensor Arduino library for AVR architecture MPUs. It gives Arduino sketches a simple-to-use interface to self-capacitance capacitive touch sensors. Because of how things work, you can't use TouchSensor and the Arduino tone() function in the same sketch.
+This is the TouchSensor Arduino library for AVR architecture MPUs. It gives Arduino sketches a simple-to-use interface to self-capacitance capacitive touch sensors. Because of how things work, you can't use TouchSensor and the Arduino tone() function in the same sketch.
 
-There are many ways to construct such sensors. For experimenting, you can construct them from small (~225mm**2) adjacent areas of copper on some sort of non-conductive substrate and then covered with thin plastic -- think copper tape, perfboard and packing tape. Signal and ground leads are connected to each piece of copper; the signal leads directly and the ground leads through ~2 megohm resistors. The other ends of the signal leads are connected pairwise to digital GPIO pins. The ground leads all attach to, well, signal ground.
+To get started you'll need a capacitive touch sensor. There are many simple ways to make them. For experimenting, you can construct them from small (~225mm**2) areas of copper on some sort of non-conductive substrate and then covered with thin plastic -- think copper tape, perfboard and packing tape. Signal and ground leads are connected to each piece of copper; the signal leads directly and the ground leads through ~2 megohm resistors. The other ends of the signal leads are connected pairwise to digital GPIO pins. The ground leads all attach to, well, signal ground.
 
-A more finished sensor can be made from copper pads designed into a PCB with signal and ground traces connected as above. Like "experimental" sensors, it's important that the copper areas are covered with a thin dielectric of some sort -- maybe solder mask or plastic tape -- so that the copper can't be touched directly.
+More finished sensors can be made from copper pads designed into a PCB with signal and ground traces connected as above. Like "experimental" sensors, it's important that the copper areas are covered with a thin dielectric of some sort -- maybe solder mask or plastic tape -- so that the copper can't be touched directly.
 
 [Microchip's Capacitive Touch Sensor Design Guide](https://ww1.microchip.com/downloads/en/AppNotes/Capacitive-Touch-Sensor-Design-Guide-DS00002934-B.pdf) is a good starting point for information on designing and building capacitive touch sensors of various sorts.
 
