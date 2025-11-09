@@ -5,13 +5,11 @@
 
 This is TouchSensor Arduino library for AVR architecture MPUs. It gives Arduino sketches a simple-to-use interface to self-capacitance capacitive touch sensors. Because of how things work, you can't use TouchSensor and the Arduino tone() function in the same sketch.
 
-There are many ways to construct such sensors. For experimenting, you can construct one from a small (~225mm**2) chunk of PCB with copper on one side and covered with thin plastic -- think packing tape. A signal lead is connected directly to the copper; a ground lead is also connected to the copper, but through a ~2 megohm resistor. Signal is connected to a digital GPIO pin. Ground attaches to, well, signal ground. A more finished sensor can be made from a copper pad designed into a PCB with signal and ground traces connected as above. Like "experimental" sensors, it's important that the touch pad's copper is covered with a thin dielectric of some sort -- maybe solder mask or plastic tape -- so that the copper is not touched directly.
+There are many ways to construct such sensors. For experimenting, you can construct them from small (~225mm**2) adjacent areas of copper on some sort of non-conductive substrate and then covered with thin plastic -- think copper tape, perfboard and packing tape. Signal and ground leads are connected to each piece of copper; the signal leads directly and the ground leads through ~2 megohm resistors. The other ends of the signal leads are connected pairwise to digital GPIO pins. The ground leads all attach to, well, signal ground.
 
-Microchip's Capacitive Touch Sensor Design Guide:
+A more finished sensor can be made from copper pads designed into a PCB with signal and ground traces connected as above. Like "experimental" sensors, it's important that the copper areas are covered with a thin dielectric of some sort -- maybe solder mask or plastic tape -- so that the copper can't be touched directly.
 
-&nbsp;&nbsp;&nbsp;&nbsp;https://ww1.microchip.com/downloads/en/AppNotes/Capacitive-Touch-Sensor-Design-Guide-DS00002934-B.pdf
-
-is a good starting point for information on designing and building capacative touch sensors of various sorts.
+[Microchip's Capacitive Touch Sensor Design Guide](https://ww1.microchip.com/downloads/en/AppNotes/Capacitive-Touch-Sensor-Design-Guide-DS00002934-B.pdf) is a good starting point for information on designing and building capacitive touch sensors of various sorts.
 
 ## How to use the library
 
