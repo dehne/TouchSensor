@@ -154,7 +154,7 @@ constexpr unsigned long TS_ASSUMED_MEASURE  = 84;       // The assumed measured 
 constexpr unsigned long TS_ASSUMED_NOISE    = 40;       // The assumed measurement noise in micros() (quite high, initially)
 constexpr unsigned long TS_MAX_MICROS       = 10000;    // The "timed out" value for a discharge time in micros()
 
-#define TS_DEBUG                                        // Uncomment to enable general debug output; comment to disable
+//#define TS_DEBUG                                        // Uncomment to enable general debug output; comment to disable
 #ifdef TS_DEBUG
 constexpr uint8_t TS_S0_LED                 = 6;        // Sensor state LED pin base. A sensor's LED pin is TS_S0_LED + clientIx
 #endif
