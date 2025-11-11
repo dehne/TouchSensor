@@ -3,7 +3,7 @@
  * 
  *****
  * 
- * TouchSensor V2.0.1, November 2025
+ * TouchSensor V2.0.2, November 2025
  * Copyright (C) 2025 D.L. Ehnebuske
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy

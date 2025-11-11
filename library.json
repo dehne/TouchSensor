@@ -1,7 +1,7 @@
 {
   "name": "TouchSensor",
-  "version": "2.0.1",
-  "description": "Capacitive touch sensor helibrarylper for Arduino/PlatformIO",
+  "version": "2.0.2",
+  "description": "Capacitive touch sensor library for Arduino/PlatformIO",
   "keywords": ["touch", "sensor", "capacitive"],
   "authors": [
     { "name": "D. L. Ehnebuske", "url": "https://github.com/dehne" }
@@ -25,5 +25,23 @@
       ".*",
       "CMakeLists.txt"
     ]
-  }
+  },
+  "examples": [
+    {
+      "name": "BasicUsage",
+      "base": "examples/BasicUsage",
+      "files": [
+          "platformio.ini",
+          "src/main.cpp"
+      ]
+    },
+    {
+      "name": "CallbackUsage",
+      "base": "examples/BasicUsage",
+      "files": [
+          "platformio.ini",
+          "src/main.cpp"
+      ]
+    }
+  ]
 }
