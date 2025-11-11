@@ -1,6 +1,6 @@
 {
   "name": "TouchSensor",
-  "version": "1.0.0",
+  "version": "2.0.1",
   "description": "Capacitive touch sensor helibrarylper for Arduino/PlatformIO",
   "keywords": ["touch", "sensor", "capacitive"],
   "authors": [
@@ -13,7 +13,7 @@
     "url": "https://github.com/dehne/TouchSensor.git"
   },
   "frameworks": ["arduino"],
-  "platforms": ["AVR"],
+  "platforms": ["atmelavr"],
   "build": {
     "includeDir": "src",
     "srcDir": "src"
