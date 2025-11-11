@@ -23,3 +23,7 @@ to
     using ts_handler_t = void (*)(uint8_t pin, void* client);
 
 The motivation was to enable member functions to (indirectly) be callbacks by going through a static adapter member function, but you can use the client parameter to pass a pointer to whatever you'd like at registration time. Whatever you passed is passed into the callback.
+
+## V2.0.1
+
+Prep for publishing to Platformio registry
