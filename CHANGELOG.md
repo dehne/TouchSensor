@@ -27,3 +27,11 @@ The motivation was to enable member functions to (indirectly) be callbacks by go
 ## V2.0.1
 
 Prep for publishing to Platformio registry
+
+## V2.0.2
+
+Update documentation
+
+## V2.0.3
+
+Update README.md, documentation in the code and the description in library.json

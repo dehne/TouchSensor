@@ -3,13 +3,13 @@
 
 ## Introduction
 
-This is the TouchSensor Arduino library for AVR architecture MPUs. It gives Arduino sketches a simple-to-use interface to self-capacitance capacitive touch sensors. Because of how things work, you can't use TouchSensor and the Arduino tone() function in the same sketch.
+This is a touch sensor Arduino library for AVR architecture MPUs. It gives Arduino sketches a simple-to-use interface to very simple self-capacitance capacitive touch sensors you can make of design into a PCB. Because of how the library works, you can't use TouchSensor and the Arduino tone() function in the same sketch.
 
-To get started you'll need a capacitive touch sensor. There are many simple ways to make them. For experimenting, you can construct them from small (~225mm**2) areas of copper on some sort of non-conductive substrate and then covered with thin plastic -- think copper tape, perfboard and packing tape. Signal and ground leads are connected to each piece of copper; the signal leads directly and the ground leads through ~2 megohm resistors. The other ends of the signal leads are connected pairwise to digital GPIO pins. The ground leads all attach to, well, signal ground.
+For experimenting, you can easily construct touch sensors from small (~225mm**2) areas of conductive material on some sort of non-conductive substrate and then covered with a thin dielectric -- think copper tape, perfboard and packing tape. Signal and ground leads are connected to each piece of copper; the signal leads directly and the ground leads through ~2 megohm resistors. Connect the other end of each signal lead to its own digital GPIO pin. Connect all the ground leads to, well, signal ground.
 
-More finished sensors can be made from copper pads designed into a PCB with signal and ground traces connected as above. Like "experimental" sensors, it's important that the copper areas are covered with a thin dielectric of some sort -- maybe solder mask or plastic tape -- so that the copper can't be touched directly.
+You can make more finished sensors from copper pads with signal and ground traces connected as above by designing them into a PCB. Like "experimental" sensors, it's important that the copper areas are covered with a thin dielectric of some sort -- maybe solder mask or plastic tape -- so that the copper can't be touched directly.
 
-[Microchip's Capacitive Touch Sensor Design Guide](https://ww1.microchip.com/downloads/en/AppNotes/Capacitive-Touch-Sensor-Design-Guide-DS00002934-B.pdf) is a good starting point for information on designing and building capacitive touch sensors of various sorts.
+Although this library's method of sensing is different than what's discussed there, [Microchip's Capacitive Touch Sensor Design Guide](https://ww1.microchip.com/downloads/en/AppNotes/Capacitive-Touch-Sensor-Design-Guide-DS00002934-B.pdf) is a good starting point for information on the physical aspects of designing and building capacitive touch sensors of various sorts.
 
 ## How to use the library
 
@@ -27,23 +27,21 @@ To make a TouchSensor go away completely, call its dtor.
 
 ## How it works
 
-The basic idea behind TouchSensor is to look for the increase in capacitance that happens when a finger is placed on a sensor's plastic-covered copper. We do this by measuring how long the sensor takes to discharge to logic LOW through its grounding resistor after having been charged to the logic HIGH. I.e., we periodically go through a cycle of charging the sensor by making the pin it's attached to an OUTPUT pin set to HIGH, and then seeing how long the voltage takes to drop to logic level LOW when the pin is made to be a high-impedance INPUT pin. When the discharge time suddenly increases (or decreases) sufficiently, we know the sensor is now being touched (or no longer being touched).
+As with all self-capacitive touch sensors, the basic idea behind TouchSensor is to somehow detect the increase in capacitance that happens when a finger is placed on a sensor's dielectric-covered copper. There are a number of ways to do this. Here we do something pretty simple. We measure how long the sensor takes to discharge to logic LOW through its grounding resistor after having been charged to the logic HIGH. That is, we periodically go through a cycle of charging the sensor by making the pin it's attached to an OUTPUT pin set to HIGH, then we measure how long the voltage takes to drop to logic level LOW when the pin is made to be a high-impedance INPUT pin. When the discharge time suddenly increases (or decreases) sufficiently, we say the sensor is now being touched (or no longer being touched). We use the suddenness of the change as the indication rather than using a threshold value to accommodate variability in sensors.
 
-There are three tricky parts. The first is fitting the work to the AVR architecture. The second is interfacing between instances of TouchSensor objects and interrupt service routines. The third is dealing with the variability in how the sensors behave, both from sensor to sensor, over time and as the physical environment around the sensor changes.
+There are three tricky parts. The first is fitting the work to the AVR architecture. The second is interfacing between instances of TouchSensor objects and interrupt service routines. The third is dealing with the variability in how the sensors behave, both from sensor to sensor, and over time as the physical environment around the sensor changes.
 
 At an architectural level, the AVR architecture supports interrupts when any of up to 24 digital GPIO pins change state. (Implementations typically support fewer.) It does this through three sets of pin-change related registers. Each set is responsible for as many as 8 GPIO pins. Each of the three sets has its own ISR vector and therefore its own ISR. In our case, the work is the same for all three, so the ISRs just delegate to a common function which is passed the set number. Further, the AVR architecture has three timer/counters. We take over Timer/Counter 1 to periodically kick off the measurement cycles. Timer/Counter 1 is the timer the Arduino tone() function uses, which is why you can't use tone() and TouchSensor in the same sketch.
 
-When a timer interrupt happens, we start a measurement cycle for the next active TouchSensor in the list of active sensors: We record the current value of micros(), and change the GPIO pin for the sensor (which will be in OUTPUT mode at logic level HIGH) to INPUT mode. This causes it to begin discharging through its ground resistor and through the high-impedance GPIO pin. When the charge voltage crosses the threshold from logic HIGH to LOW, the transition causes a pin-change interrupt. This invokes the common ISR function where we work out how many micros() it was since the measurement cycle began. We then invoke the (private) updateState() member function for the appropriate TouchSensor, telling it how long the cycle took. The TouchSensor merely records the value it was passed and sets a flag marking the existence of the new data. Later, when TouchSensor::run() is invoked (in the sketch's loop()), the TouchSensor's doRun() private method is invoked.
-When doRun notices the new data, it updates the state of things (deciding, for example, whether the sensor was just touched) for that TouchSensor.
+When a timer interrupt happens, we start a measurement cycle for the next active TouchSensor in the list of active sensors: We record the current value of micros(), and change the GPIO pin for the sensor (which will be in OUTPUT mode at logic level HIGH) to INPUT mode. This causes it to begin discharging through its ground resistor and through the high-impedance GPIO pin. When the charge voltage crosses the threshold from logic HIGH to LOW, the transition causes a pin-change interrupt. This invokes the common ISR function where we work out how many micros() it was since the measurement cycle began. We then invoke the (private) updateState() member function for the appropriate TouchSensor, telling it how long the cycle took. The TouchSensor merely records the value it was passed and sets a flag marking the existence of the new data. Later, when the static member function TouchSensor::run() is invoked (in the sketch's loop()), the TouchSensor's doRun() private method is invoked. When doRun notices the new data, it updates the state of things (deciding, for example, whether the sensor was just touched) for that TouchSensor.
 
-The active sensors are put through measurement cycles in a round-robin fashion, one after another as timer interrupts happen. Doing it this way spreads out the work done in an ISR context across time, keeping the servicing of any given interrupt short.
+We put the active sensors through measurement cycles in a round-robin fashion, one after another as timer interrupts happen. Doing it this way spreads out the work done in an ISR context across time, keeping the servicing of any given interrupt short.
 
-To be able to invoke the updateState() and doRun() for the appropriate instance of the TouchSensor, there's a static array of pointers to the TouchSensors, maintained by the instances in their begin() and end() member
-functions.
+To be able to invoke the updateState() and doRun() member functions of TouchSensor instances, the begin() and end() member functions maintain a static array of pointers to the active TouchSensors.
 
-As mentioned, keeping track of what the incoming data about a given sensor means is the job of each instance's doRun() private member function. The doRun() member function for each active TouchSensor instance is invoked from the static member function TouchSensor::run(), which should be invoked often during the  sketch's execution.
+As mentioned, keeping track of what the incoming data about a given sensor means is the job of each instance's doRun() private member function. The static member function TouchSensor::run() invokes the doRun() member function for each active TouchSensor.
 
-From the series of incoming measurements, doRun() calculates two quantities, a predicted value for the next measurement, and a measure of the current level of noise in the incoming measurements. Both are defined by a computationally efficient "moving average":
+From the series of incoming measurements, doRun() calculates two quantities, a predicted value for the next measurement, and a measure of the current level of noise in the incoming measurements. Both are defined by a computationally efficient algorithm that computes a sort of "moving average":
 
 Let a(k) be the k<sup>th</sup> average, d(k) the k<sup>th</sup> datum, and s a constant, then a(k) = (a(k-1) * 2<sup>s</sup> + d(k)) / 2<sup>s</sup>.
 
@@ -51,7 +49,7 @@ For p(k), the k<sup>th</sup> prediction, s = TS_PREDICTION_SHIFT, d(k) = m(k), w
 
 For n(k), the k<sup>th</sup> noise estimation, s = TS_NOISE_SHIFT and d(k) = abs(m(k-1) - m(k)) where m(k) is as above.
 
-The state of the sensor -- touched or not-touched -- at time k is determined by whether m(k) is sufficiently different than p(k), given the values of n(k) and and m(k). 
+The state of the sensor -- touched or not-touched -- at time k is determined by whether m(k) is sufficiently different than p(k), given the values of n(k) and and m(k).
 
 Specifically, if
 

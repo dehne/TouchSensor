@@ -1,7 +1,7 @@
 {
   "name": "TouchSensor",
-  "version": "2.0.2",
-  "description": "Capacitive touch sensor library for Arduino/PlatformIO",
+  "version": "2.0.3",
+  "description": "Capacitive touch sensor library for atmelavr using the Arduino framework. Required external hardware consists of a patch of copper covered with a dielectric such as packing tape and a 2 megohm resistor. Connects to a single digital pin and ground.",
   "keywords": ["touch", "sensor", "capacitive"],
   "authors": [
     { "name": "D. L. Ehnebuske", "url": "https://github.com/dehne" }
