@@ -3,7 +3,7 @@
 
 ## Introduction
 
-This is a touch sensor Arduino library for AVR architecture MPUs. It gives Arduino sketches a simple-to-use interface to very simple self-capacitance capacitive touch sensors you can make of design into a PCB. Because of how the library works, you can't use TouchSensor and the Arduino tone() function in the same sketch.
+This is a touch sensor Arduino library for AVR architecture MPUs. It gives Arduino sketches a simple-to-use interface to very simple self-capacitance capacitive touch sensors you can make to experiment with, or you can design more finished-looking ones into a PCB. Because of how the library works, you can't use TouchSensor and the Arduino tone() function in the same sketch.
 
 For experimenting, you can easily construct touch sensors from small (~225mm**2) areas of conductive material on some sort of non-conductive substrate and then covered with a thin dielectric -- think copper tape, perfboard and packing tape. Signal and ground leads are connected to each piece of copper; the signal leads directly and the ground leads through ~2 megohm resistors. Connect the other end of each signal lead to its own digital GPIO pin. Connect all the ground leads to, well, signal ground.
 
