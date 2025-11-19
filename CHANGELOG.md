@@ -35,3 +35,13 @@ Update documentation
 ## V2.0.3
 
 Update README.md, documentation in the code and the description in library.json
+
+## V2.1.0
+
+Use pins_arduino.h definitions for the type of processor being used to make sure TouchSensors connect only to digital pins for which the processor implementation supports pin-change interrupts.
+
+Add support for MCUs running at different clock speeds based on F_CPU value.
+
+Rewrite the core timing code to minimize pin-to-pin timing variability, thus improving the discharge time measurement accuracy.
+
+Change platformio.ini for the examples to make them depend uniformly on the library code in the package, not the one on the repo.

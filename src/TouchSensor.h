@@ -4,7 +4,7 @@
  * 
  *****
  * 
- * TouchSensor V2.0.3, November 2025
+ * TouchSensor V2.1.0, November 2025
  * Copyright (C) 2025 D.L. Ehnebuske
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -41,10 +41,7 @@ constexpr unsigned long TS_ASSUMED_MEASURE  = 84;       // The assumed measured 
 constexpr unsigned long TS_ASSUMED_NOISE    = 40;       // The assumed measurement noise in micros() (quite high, initially)
 constexpr unsigned long TS_MAX_MICROS       = 10000;    // The "timed out" value for a discharge time in micros()
 
-//#define TS_DEBUG                                        // Uncomment to enable general debug output; comment to disable
-#ifdef TS_DEBUG
-constexpr uint8_t TS_S0_LED                 = 6;        // Sensor state LED pin base. A sensor's LED pin is TS_S0_LED + clientIx
-#endif
+#define TS_DEBUG                                        // Uncomment to enable general debug output; comment to disable
 //#define TS_SCOPE                                        // Uncomment to enable debugging scope pins
 #ifdef TS_SCOPE
 constexpr uint8_t TS_CAP_ISR_PIN                = 10;   // 'Scope pin for capISR entry/exit: HIGH means in the ISR

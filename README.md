@@ -3,7 +3,7 @@
 
 ## Introduction
 
-This is a touch sensor Arduino library for AVR architecture MPUs. It gives Arduino sketches a simple-to-use interface to very simple self-capacitance capacitive touch sensors you can make to experiment with, or you can design more finished-looking ones into a PCB. Because of how the library works, you can't use TouchSensor and the Arduino tone() function in the same sketch.
+This is a touch sensor Arduino library for atmelavr architecture MPUs. It gives Arduino sketches a simple-to-use interface to very simple self-capacitance capacitive touch sensors you can make to experiment with, or you can design more finished-looking ones into a PCB. Because of how the library works, you can't use TouchSensor and the Arduino tone() function in the same sketch.
 
 For experimenting, you can easily construct touch sensors from small (~225mm**2) areas of conductive material on some sort of non-conductive substrate and then covered with a thin dielectric -- think copper tape, perfboard and packing tape. Signal and ground leads are connected to each piece of copper; the signal leads directly and the ground leads through ~2 megohm resistors. Connect the other end of each signal lead to its own digital GPIO pin. Connect all the ground leads to, well, signal ground.
 
@@ -15,7 +15,9 @@ Although this library's method of sensing is different than what's discussed the
 
 The intended usage pattern is this.
 
-For each sensor you have (you can have as many as there are digital GPIO pins available), instantiate a TouchSensor object giving the ctor the Arduino digital pin number to which you've attached the sensor. Often, these are global variables. Then invoke begin() once on each object to get it going, usually in setup().
+Each touch sensor requires one digital pin with pin-change interrupt support. Different atmelavr MCU implementations support different numbers and configurations of such pins. You can tell whether your target MCU supports pin-change interrupts on a given Arduino pin by using the macro digitalPinToPCICR(p), where p is the Arduino digital pin number. If this expands to a non-zero value in your environment the target MCU supports pin-change interrupts on that pin and you can use it for a touch sensor. You can have as many touch sensors as there are supported pins.
+
+For each sensor you have, instantiate a TouchSensor object giving the ctor the Arduino digital pin number to which you've attached the sensor. Often, these are global variables. Then invoke begin() once on each object to get it going, usually in setup().
 
 Then in loop(), call static member function TouchSensor::run(). This will get the active TouchSensor objects to do what they need to do to keep themselves up to date. (There is also work done in a couple of interrupt-service routines, but it's kept to an absolute minimum.) If TouchSensor::run() isn't called often enough, the TouchSensors' state won't be kept up to date with what's going on in the real world.
 

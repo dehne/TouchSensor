@@ -3,7 +3,7 @@
  * 
  *****
  * 
- * TouchSensor V2.0.3, November 2025
+ * TouchSensor V2.1.0, November 2025
  * Copyright (C) 2025 D.L. Ehnebuske
  * 
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -28,33 +28,57 @@
 #include <TouchSensor.h>
 
 namespace ts_isr {
-constexpr uint8_t NONPIN = NUM_DIGITAL_PINS;                        // Value in clientList indicating pin number not stored in that element
-static TouchSensor* volatile client[NUM_DIGITAL_PINS] = {nullptr};  // Pointers to active clients (or nullptr if no active client in a slot)
-                                                                    //   indexed by the Arduino digital pin number to which they are attached
-static volatile bool clientPending[NUM_DIGITAL_PINS] = {false};     // Whether a client's discharge is pending; indexed as per client[]
-static volatile unsigned long startMicros[NUM_DIGITAL_PINS] = {0};  // micros() when the client's latest sampling cycle started
-static volatile uint8_t clientList[NUM_DIGITAL_PINS];               // Compacted list of clients. Each entry is the pin number of an active
-                                                                    //   clients.  if clientList[i] == NOPIN, that's the end of list
-static uint8_t irqToPin[3][8];                                      // Map from pin-change IRQ number to the Arduino pins that IRQ serves
-static struct InitTsISR {                                           // Initialize non-zero statics (Kinda hacky, no?)
-  InitTsISR() {
-    for(uint8_t i = 0; i < NUM_DIGITAL_PINS; i++) {                 //   clientList full of NONPIN
-      clientList[i] = NONPIN;
-    }
-    uint8_t irqPinCount[3] = { 0 };                                 //   irqToPin[port][0..8] lists the pins served by specified irq
-    for (uint8_t pin = 0; pin < NUM_DIGITAL_PINS; pin++) {          //     Entry == NONPIN means end of list of pins for this irq
-      uint8_t irq = digitalPinToPCMSK(pin) == &PCMSK0 ? 0 : digitalPinToPCMSK(pin) == &PCMSK1 ? 1 : 2;
-      irqToPin[irq][irqPinCount[irq]++] = pin;
-    }
-    for (uint8_t irq = 0; irq < 3; irq++) {
-      for (; irqPinCount[irq] < 8 ; irqPinCount[irq]++) {
-        irqToPin[irq][irqPinCount[irq]] = NONPIN;
-      }
-    }
-  };
-} initTsIsr;
-static volatile uint8_t clientListIx = 0;                           // The index into clientList of last client to start a measurement cycle
-static bool doClassInit = true;                                     // Set false by first invocation of begin() after doing class init work
+
+  /**
+   * Atmelavr micro processors vary in which and how many GPIO pins they support for pin-change interrupts. How 
+   * Arduino pin numbers get mapped to the pins that are supported also varies. But the general architecure is 
+   * consistent from implementation to implementation. There are some number of IRQ vectors, each of whidh 
+   * supports pin-change interrupts for up to eight GPIO pins. The number of IRQ vectors varies from 
+   * implementation to implementation, but, so far anyway, there are at most four pin-change of them. 
+   * 
+   * We can deduce the number of vectors by whether symbols for them exist in the code environment -- they're 
+   * defined in the file pins_arduino.h for the specific implementation being used.  I've chosen PCMSKx as the 
+   * symbol to use.
+   * 
+   * If there are, for example, three vectors defined, there can't be more than 24 pins that can generate 
+   * pin-change interrupts. There might be fewer. NUM_PC_PINS is the upper bound for the number of pin-change 
+   * interrupt pins supported. It's used to size arrays indexed by something we call the client index -- a slot 
+   * for eight possible clients on each of the IRQ vectors. See pinToClentIx(), below.
+   */
+  #if defined(PCMSK3)
+    constexpr uint8_t NUM_PC_PINS = 32;
+    constexpr uint8_t NUM_IRQ = 4;
+  #elif defined(PCMSK2)
+      constexpr uint8_t NUM_PC_PINS = 24;
+      constexpr uint8_t NUM_IRQ = 3;
+  #elif defined(PCMSK1)
+        constexpr uint8_t NUM_PC_PINS = 16;
+        constexpr uint8_t NUM_IRQ = 2;
+  #else
+        constexpr uint8_t NUM_PC_PINS = 8;
+        constexpr uint8_t NUM_IRQ = 1;
+  #endif
+
+  constexpr uint8_t NONPIN = NUM_PC_PINS;                             // Value in clientList indicating a client index not stored in that element
+  static TouchSensor* volatile client[NUM_PC_PINS] = {nullptr};       // Pointers to active clients (or nullptr if no active client in a slot)
+                                                                      //   indexed by pinToClientIx() of the pin to which they are attached
+  static volatile bool clientPending[NUM_PC_PINS] = {false};          // Whether a client's discharge is pending; indexed as per client[]
+  static volatile unsigned long startMicros[NUM_PC_PINS] = {0};       // micros() when the client's latest sampling cycle started
+  static volatile uint8_t clientIx = 0;                               // The index into client of last client to start a measurement cycle
+  static bool doClassInit = true;                                     // Set false by first invocation of begin() after doing class init work
+
+/**
+ * @brief Convert an Arduino digital pin number to its client index equivalent
+ * 
+ * @param pin       The Arduino pin number to be converted
+ * @return uint8_t  The client index equivalent or NUM_PC_PINS if the specified pin does not support pin-change interrupts
+ */
+uint8_t inline pinToClientIx (uint8_t pin) {
+  if (digitalPinToPCICR(pin) != 0) {
+    return 8 * digitalPinToPCICRbit(pin) + digitalPinToPCMSKbit(pin);
+  }
+  return NUM_PC_PINS;
+}
 
 /**
  * @brief   Interrupt service routine for Timer/Counter1
@@ -70,67 +94,63 @@ void timerISR() {
   #ifdef TS_SCOPE
   digitalWrite(TS_TIMER_ISR_PIN, HIGH);
   #endif
-
-  // Increment clientListIx by 1 modulo the number of *actual* clients. 
-  clientListIx = (clientListIx + 1) % NUM_DIGITAL_PINS;
-  if (clientList[clientListIx] == NONPIN) {
-    clientListIx = 0;
-  }
-
-  // curClient = the index into client[] for the client (if any) we'll start a measurement cycle for
-  uint8_t curClient = clientList[clientListIx];
-
-  // If there are no clients, nothing to do
-  if (curClient >= NUM_DIGITAL_PINS) {
-    return;
-  }
-
-  if (client[curClient]) {
-    startMicros[curClient] = micros();
-    if (clientPending[curClient]) {
-      // The client still hasn't discharged! Force it's pin to go low (and so cause an interrupt)
-      pinMode(curClient, OUTPUT);
-      digitalWrite(curClient, LOW);
-      clientPending[curClient] = false; // Show it was forced, not a real measurement
-    } else {
-      // The client is ready to go. Start the next measurement cycle
-      pinMode(curClient, INPUT);
-      clientPending[curClient] = true;
+  // Find the next client to work on 
+  for (uint8_t ix = (clientIx + 1) % NUM_PC_PINS; ix != clientIx; ix = (ix + 1) % NUM_PC_PINS) {
+    if (client[ix]) {
+      clientIx = ix;
+      break;
     }
   }
+  if (client[clientIx]) {
+    uint8_t pin = client[clientIx]->getPin();
+    if (clientPending[clientIx]) {
+      // The client still hasn't discharged! Force its pin to go low (and so cause an interrupt)
+      pinMode(pin, OUTPUT);
+      digitalWrite(pin, LOW);
+      clientPending[clientIx] = false; // Show it was forced, not a real measurement
+    } else {
+      // The client is ready to go. Start the next measurement cycle
+      pinMode(pin, INPUT);
+      clientPending[clientIx] = true;
+    }
+    startMicros[clientIx] = micros();
+  }
+
   #ifdef TS_SCOPE
   digitalWrite(TS_TIMER_ISR_PIN, LOW);
   #endif
-
 }
 
 /**
  * @brief Interrupt serivce routine for all the pin change interrupts.
  * 
- * @param vector    The interrupt vector (0..2) that caused the interrupt.
+ * @param vector    The interrupt vector (0..NUM_IRQ - 1) that caused the interrupt.
  */
 void capISR(uint8_t irqNo) {
   #ifdef TS_SCOPE
   digitalWrite(TS_CAP_ISR_PIN, HIGH);                   // Mark entry to ISR
   #endif
 
-  // Iterate through the pins that could possibly have caused this interrupt and process the one(s) that did. Which of the
-  // 3 pin-change IRQs that caused the interrupt is in irqNo. The array irqToPin[][] for a given IRQ gives the Arduino pin 
-  // numbers that port serves, up to a max of 8 pins. If the IRQ serves less than 8, the list is termnated by a NONPIN entry.
-  for (uint8_t pinIx = 0; pinIx < 8 && irqToPin[irqNo][pinIx] != NONPIN; pinIx++) {
-    // Okay, this is a little complicated and I'm bound to forget. So here's what's going on with each client. We're only 
-    // interested in client pins that are LOW. HIGH client pins either caused the interrupt because they changed to HIGH 
-    //(as a side effect of the timer kicking off a measurement cycle) or are HIGH because they haven't yet discharged (and 
-    // so aren't involved in this interrupt). If the client isn't still pending, that means it was forced LOW during the 
-    // timer ISR. In that case, by convention, the update specifies TS_MAX_MICROS as the discharge time to mark it as 
-    // (probably) bogus. Unreasonably long (> TS_MAX_MICROS) are also reported as TS_MAX_MICROS.
-    uint8_t pin = irqToPin[irqNo][pinIx];
-    if (client[pin] && digitalRead(pin) == LOW) {
-      unsigned long curDeltaT = micros() - startMicros[pin];  // How many micros() the sensor took to discharge this cycle
-      client[pin]->updateState(clientPending[pin] && curDeltaT < TS_MAX_MICROS ? curDeltaT : TS_MAX_MICROS);
-      pinMode(pin, OUTPUT);
-      digitalWrite(pin, HIGH);
-      clientPending[pin] = false;
+  // Iterate through the clients whose pin(s) could have caused this interrupt. The IRQ vector for the interrupt 
+  // comes in as irqNo, so the clients that could have caused it are client[8 * irq + i] where 0 <= i < 8.
+  unsigned long curMicros = micros();
+  for (uint8_t cIx = 8 * irqNo; cIx < 8 * irqNo + 8; cIx++) {
+    if (client[cIx]) {
+      // Okay, this is a little complicated and I'm bound to forget. So here's what's going on with each client. 
+      // We're only interested in clients whose pin is LOW. A client with a HIGH pin either caused the interrupt 
+      // because it changed to HIGH (as a side effect of the timer kicking off a measurement cycle) or is HIGH 
+      // because it hasn't yet discharged (and so isn't involved in this interrupt). If the client isn't still 
+      // pending, that means it was forced LOW during the timer ISR. In that case, by convention, the update 
+      // specifies TS_MAX_MICROS as the discharge time to mark it as (probably) bogus. Unreasonably long 
+      // (> TS_MAX_MICROS) are also reported as TS_MAX_MICROS.
+      uint8_t pin = client[cIx]->getPin();
+      if (digitalRead(pin) == LOW) {
+        unsigned long curDeltaT = curMicros - startMicros[cIx];   // How many micros() the sensor took to discharge this cycle
+        client[cIx]->updateState(clientPending[cIx] && curDeltaT < TS_MAX_MICROS ? curDeltaT : TS_MAX_MICROS);
+        pinMode(pin, OUTPUT);
+        digitalWrite(pin, HIGH);
+        clientPending[cIx] = false;
+      }
     }
   }
   
@@ -138,27 +158,36 @@ void capISR(uint8_t irqNo) {
   digitalWrite(TS_CAP_ISR_PIN, LOW);                        // Mark exit from ISR
   #endif
 }
-ISR(TIMER1_COMPA_vect) {
+
+ISR(TIMER1_COMPA_vect) {          // Actual ISR for Timer/Counter1
   timerISR();
 }
-ISR(PCINT0_vect) {
+ISR(PCINT0_vect) {                // Actual ISR for pin-change interrupt 0
   capISR(0);
 }
-ISR(PCINT1_vect) {
+#ifdef PCMSK1
+ISR(PCINT1_vect) {                // Actual ISR for pin-change interrupt 1
   capISR(1);
 }
-ISR(PCINT2_vect) {
+#endif
+#ifdef PCMSK2
+ISR(PCINT2_vect) {                // Actual ISR for pin-change interrupt 2
   capISR(2);
 }
+#endif
+#ifdef PCMSK3
+ISR(PCINT3_vect) {                // Actual ISR for pin-change interrupt 3
+  capISR(3);
+}
+#endif
 } // namespace ts_isr
 
 // TouchSensor static public member functions
 
 void TouchSensor::run() {
-  for (uint8_t cIx = 0; cIx < NUM_DIGITAL_PINS && ts_isr::clientList[cIx] != ts_isr::NONPIN; cIx++) {
-    uint8_t pin = ts_isr::clientList[cIx];
-    if (ts_isr::client[pin]) {
-      ts_isr::client[pin]->doRun();
+  for (uint8_t cIx = 0; cIx < ts_isr::NUM_PC_PINS; cIx++) {
+    if (ts_isr::client[cIx]) {
+      ts_isr::client[cIx]->doRun();
     }
   }
 }
@@ -183,8 +212,8 @@ bool TouchSensor::begin() {
 }
 
 bool TouchSensor::begin(ts_stateData_t initState) {
-  // Reject goofy pin numbers and requests for second sensor on same pin
-  if (pinNumber >= NUM_DIGITAL_PINS || ts_isr::client[pinNumber]) {
+  // Reject bad pin numbers and requests for second sensor on same pin
+  if (digitalPinToPCICR(pinNumber) == 0 || ts_isr::client[ts_isr::pinToClientIx(pinNumber)]) {
     return false;
   }
 
@@ -197,13 +226,32 @@ bool TouchSensor::begin(ts_stateData_t initState) {
     digitalWrite(TS_TIMER_ISR_PIN, LOW);
     #endif
 
+    #ifdef TS_DEBUG
+    pinMode(LED_BUILTIN, OUTPUT);
+    digitalWrite(LED_BUILTIN, LOW);
+    #endif
+
     noInterrupts();
     // Do pin-change interrupt initialization
-    PCMSK0 = 0; // Disable all the individual pins from producing pin-change interrupts
+
+    // Disable all the individual pins from producing pin-change interrupts and nable the pin-change interrupt vectors
+    #ifdef PCMSK0
+    PCMSK0 = 0;
+    PCICR |= _BV(PCIE0);
+    #endif
+    #ifdef PCMSK1
     PCMSK1 = 0;
+    PCICR |= _BV(PCIE1);
+    #endif
+    #ifdef PCMSK2
     PCMSK2 = 0;
-    
-    PCICR = _BV(PCIE2) + _BV(PCIE1) + _BV(PCIE0); // Enable the three pin-change interrupt ports. 
+    PCICR |= _BV(PCIE2);
+    #endif
+    #ifdef PCMSK3
+    PCMSK3 = 0;
+    PCICR |= _BV(PCIE3);
+    #endif
+
     // NB: Still no actual pin-change interrupts because the masks were just cleared.
 
     /****
@@ -238,50 +286,48 @@ bool TouchSensor::begin(ts_stateData_t initState) {
      * Counter1. We want an interrupt only on "Output Compare A Match," which is enabled by setting the bit named 
      * OCIE1A. So we set that one and the others to zero.
      */
-    TCCR1A = 0;                                     // CTC, scale to clock / 1024
+    TCCR1A = 0;                                     // CTC, scale to clock / 1024. i.e., tick = 1024 / F_CPU sec
     TCCR1B = bit(WGM12) | bit(CS10) | bit(CS12); 
-    OCR1A =  199;                                   // Compare A register value (200 * ticks / 1024), 12.8ms
+    OCR1A =  ((16000000L / F_CPU) * 200L) - 1L;     // We want an interrupt every 12.8ms, so 200 ticks at F_CPU = 16Mhz
     TIMSK1 = bit(OCIE1A);                           // Interrupt on Compare A Match
 
     ts_isr::doClassInit = false;
     interrupts();
   }
 
+  // Get things going for this instance
+  uint8_t cIx = ts_isr::pinToClientIx(pinNumber);
 
-// Get things going for this instance
+  #ifdef TS_DEBUG
+  Serial.print(F("\nStarting sensor with pin number "));
+  Serial.print(pinNumber);
+  Serial.print(F(", client index "));
+  Serial.print(cIx);
+  Serial.println('.');
+  #endif
+  
   setStateData(initState);
   pinMode(pinNumber, OUTPUT);                               // Start charging our sensor
   digitalWrite(pinNumber, HIGH);
-  ts_isr::clientPending[pinNumber] = true;
+  ts_isr::clientPending[cIx] = true;
 
   noInterrupts();
 
-  for (uint8_t i = 0; i < NUM_DIGITAL_PINS; i++) {          // Put us in the client list at the end
-    if (ts_isr::clientList[i] == ts_isr::NONPIN) {
-      ts_isr::clientList[i] = pinNumber;
-      clientIx = i;
-      break;
-    }
-  }
-  ts_isr::client[pinNumber] = this;                         // Register us as a new client
+  ts_isr::client[cIx] = this;                               // Register us as a new client
   volatile uint8_t *reg = digitalPinToPCMSK(pinNumber);
   uint8_t bit = digitalPinToBitMask(pinNumber);
   *reg |= bit;                                              // Turn on pin-change interrupts for our GPIO pin
   isrMeasure = state.measure;                               // Start with the assumed measurement
-  ts_isr::startMicros[pinNumber] = micros();                // Record when the cycle started
+  ts_isr::startMicros[cIx] = micros();                      // Record when the cycle started
 
   interrupts();
-
-  #ifdef TS_DEBUG
-  pinMode(TS_S0_LED + clientIx, OUTPUT);
-  #endif
 
   return true;
 }
 
 void TouchSensor::end() {
   // If the pin number is whacky or we're not in service, there's nothing to do
-  if (pinNumber >= NUM_DIGITAL_PINS || !ts_isr::client[pinNumber]) {
+  if (pinNumber >= NUM_DIGITAL_PINS || !ts_isr::client[ts_isr::pinToClientIx(pinNumber)]) {
     return;
   }
 
@@ -291,30 +337,13 @@ void TouchSensor::end() {
   uint8_t bit = digitalPinToBitMask(pinNumber);
   *reg &= ~bit;                                                                   // Turn off pin-change interrupts for our GPIO pin
 
-  // Remove our entry from clientList
-  uint8_t ix = 0;
-  while (ix < NUM_DIGITAL_PINS && ts_isr::clientList[ix] != pinNumber) {          // Find ix for our entry
-    ix++;
-  }
-  if (ts_isr::clientListIx == ix) {                                               // Fix up clientListIx to reflect our exit as a client
-    ts_isr::clientListIx = ix > 0 ? ix - 1 : NUM_DIGITAL_PINS - 1;
-  } else if (ts_isr::clientListIx > ix) {
-    ts_isr::clientListIx = ts_isr::clientListIx - 1;
-  }
-  while (ts_isr::clientList[ix] != ts_isr::NONPIN) {                              // Scootch entries after ours up in the list
-    ts_isr::clientList[ix] = ix < NUM_DIGITAL_PINS - 1 ? ts_isr::clientList[ix + 1] : ts_isr::NONPIN;
-    if (ts_isr::clientList[ix] == ts_isr::NONPIN) {
-      break;
-    }
-    ix++;
-  }
-  ts_isr::client[pinNumber] = nullptr;                                            // Deregister us as a client
+  ts_isr::client[ts_isr::pinToClientIx(pinNumber)] = nullptr;                     // Deregister us as a client
 
   interrupts();
 }
 
 TouchSensor::~TouchSensor()  {
-  if (ts_isr::client[pinNumber]) {
+  if (ts_isr::client[ts_isr::pinToClientIx(pinNumber)]) {
     end();
   }
 }
@@ -421,10 +450,6 @@ void TouchSensor::doRun() {
   if (releasedHandler && gotUntouched) {
     releasedHandler(pinNumber, releasedClient);
   }
-
-  #ifdef TS_DEBUG
-  digitalWrite(TS_S0_LED + clientIx, touching);
-  #endif
 }
 
 void TouchSensor::updateState(unsigned long newMeasure) {

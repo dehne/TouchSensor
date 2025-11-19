@@ -30,7 +30,15 @@
 #include <Arduino.h>
 #include <TouchSensor.h>
 
-TouchSensor sensor[] {2, 3, 4, 5};                                  // The sensors
+TouchSensor sensor[] {                                              // The sensors
+  #if defined(__AVR_ATmega2560__)                                   // For the example we use these pins for
+  50, 51, 52, 53                                                    // ATmega2560-based boards
+  #elif defined(__AVR_ATmega32U4__)
+  8, 9, 10, 16                                                      // atmega32u4-based boards like the leonardo
+  #else
+  2, 3, 4, 5                                                        // everything else (which doesn't always work!)
+  #endif
+};
 
 constexpr unsigned long SERIAL_DELAY = 500;                         // The time in millis() to delay to wait for Serial to come up
 constexpr unsigned long DUMP_MILLIS = 250;                          // Sensor dump intervl in millis()
@@ -39,17 +47,36 @@ constexpr size_t N_SENSORS = (sizeof(sensor) / sizeof(sensor[0]));  // The numbe
 
 void setup() {
   Serial.begin(9600);
-  delay(SERIAL_DELAY);
+  do {
+      delay(SERIAL_DELAY);
+
+  } while (!Serial);
+  
   Serial.println(BANNER);
 
+  bool failed = false;
   for (uint8_t sNo = 0; sNo < N_SENSORS; sNo++) {
     Serial.print(F("sensor["));
     Serial.print(sNo);
     Serial.print(F("]: "));
-    Serial.println(sensor[sNo].begin() ? F("succeeded") : F("failed"));
+    bool ok =  sensor[sNo].begin();
+    failed |= !ok;
+    Serial.println(ok ? F("succeeded") : F("failed"));
+  }
+  while (failed) {
+    // Spin!
   }
   for (uint8_t sNo = 0; sNo < N_SENSORS; sNo++) {
     Serial.print(sNo);
+    Serial.print(' ');
+  }
+  Serial.print(F(" | "));
+  for (uint8_t sNo = 0; sNo < N_SENSORS; sNo++) {
+    uint8_t pin = sensor[sNo].getPin();
+    if (pin < 10) {
+      Serial.print(' ');
+    }
+    Serial.print(pin);
     Serial.print(' ');
   }
   Serial.print('\n');
